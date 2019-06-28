@@ -10,34 +10,35 @@
  *
  ******************************************************************************/
 
+ #include "gurobi_c++.h"
+ #include "nfold.h"
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include "nfold.h"
 
 using namespace std;
 
-int main()
+int main(int argc, char *argv[])
 {
-  cout << "Hello n-fold ILP!" << endl;
+  GRBEnv env = GRBEnv();
+  env.set("LogFile", "info.log");
+  env.start();
 
-  NFold testInput;
-
-  ifstream ins;
-  ins.open("tests/QCmax_m_30_lengths_2_3_7_13_weigths_6_5_2_1_smallest_100_largest_500_slack_r_0.90_formatted.txt");
-  testInput.instantiate(ins);
-  ins.close();
-  testInput.setGraverComplexity(5);
-  testInput.outputState(cout);
-
-  vector<int> step = testInput.findGoodStep(1);
-
-  cout << "Good Step: " << endl;
-  for (size_t i = 0; i < step.size(); i++)
+  for (int i = 1; i < argc; i++)
   {
-    cout << step[i] << ' ';
+    NFold nfInstance(&env);
+    string filename = argv[i];
+
+    cout << "Beginning New Solve from \"" << filename << "\":" << endl;
+    ifstream ins;
+    ins.open(filename);
+    nfInstance.instantiate(ins);
+    ins.close();
+
+    nfInstance.setGraverComplexity(5);
+    nfInstance.solve();
+    nfInstance.outputState(cout);
   }
-  cout << endl;
   return EXIT_SUCCESS;
 }

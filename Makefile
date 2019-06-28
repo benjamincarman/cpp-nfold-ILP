@@ -14,7 +14,7 @@ NFoldSolve: main.o nfold.o
 	make clean
 
 main.o: main.cc
-	g++ $(CFLAGS) -c main.cc
+	g++ $(CFLAGS) -c main.cc -I$(INC)
 
 nfold.o: nfold.cc
 	g++ $(CFLAGS) -c nfold.cc -I$(INC)

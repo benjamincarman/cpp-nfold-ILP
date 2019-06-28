@@ -21,16 +21,17 @@
 
 using namespace std;
 
-NFold::NFold()
+NFold::NFold(GRBEnv *e)
 {
-
+  env = e;
 }
 
-NFold::NFold(unsigned int n1, std::vector<int> objective1, std::vector<int> lowerBound1,
+NFold::NFold(GRBEnv *e, unsigned int n1, std::vector<int> objective1, std::vector<int> lowerBound1,
              std::vector<int> upperBound1, std::vector<std::vector<int> > topMatrix1,
              std::vector<std::vector<int> > diagMatrix1, std::vector<int> b1,
              std::optional<std::vector<int> > initial)
 {
+  env = e;
   n = n1;
   r = topMatrix.size();
   s = diagMatrix.size();
@@ -56,11 +57,12 @@ NFold::NFold(unsigned int n1, std::vector<int> objective1, std::vector<int> lowe
   }
 }
 
-NFold::NFold(unsigned int n1, unsigned int r1, unsigned int s1, unsigned int t1,
+NFold::NFold(GRBEnv *e, unsigned int n1, unsigned int r1, unsigned int s1, unsigned int t1,
              std::vector<int> objective1, std::vector<int> lowerBound1,
              std::vector<int> upperBound1, std::vector<std::vector<double> > constraintMatrix1,
              std::vector<int> b1, std::optional<std::vector<int> > initial)
 {
+  env = e;
   n = n1;
   r = r1;
   s = s1;
@@ -295,8 +297,6 @@ void NFold::solve()
   {
     vector<int> graverBestStep = findGraverBestStep();
 
-    bool done = false;
-
     //If returns a zero step or a step in wrong direction
     if (innerProduct(objective, graverBestStep) > -1)
     {
@@ -329,7 +329,7 @@ vector<int> NFold::findGraverBestStep()
   int lambda = 1;
 
   vector<int> bestStep(n * t, 0);
-  //int bestObjective
+  int bestObjectiveValue = 0;
   for (size_t i = 0; i < upperLimit; i++)
   {
     vector<int> goodStep = findGoodStep(lambda);
@@ -341,10 +341,38 @@ vector<int> NFold::findGraverBestStep()
 
     int exhaustedLambda = INT_MAX;
 
+    for (size_t i = 0; i < n * t; i++)
+    {
+      double lowerFeasibleStepLength = (1.0 *(lowerBound[i] - currentSolution[i]))/goodStep[i];
+      double upperFeasibleStepLength = (1.0 *(upperBound[i] - currentSolution[i]))/goodStep[i];
 
+      int bestFeasibleStepLength = int(floor(max(lowerFeasibleStepLength, upperFeasibleStepLength)));
+
+      if (exhaustedLambda > bestFeasibleStepLength)
+      {
+        exhaustedLambda = bestFeasibleStepLength;
+      }
+    }
+
+    //Just in case
+    if (exhaustedLambda == INT_MAX || exhaustedLambda < lambda)
+    {
+      exhaustedLambda = lambda;
+    }
+
+    for (size_t i = 0; i < n * t; i++)
+    {
+      goodStep[i] *= exhaustedLambda;
+    }
+    int currentObjectiveValue = innerProduct(objective, goodStep);
+
+    if (currentObjectiveValue < bestObjectiveValue)
+    {
+      bestObjectiveValue = currentObjectiveValue;
+      bestStep = goodStep;
+    }
 
     //Exhaust the lamda and see if it is better step than ones seen so far
-    //May have a break if w dot good_step >= 0?
     lambda *= 2; //TODO: Maybe generalize this to other c-apx values
   }
 
@@ -355,10 +383,7 @@ vector<int> NFold::findGoodStep(int lambda)
 {
   try {
     //Create set Gamma and solve ILP for each
-    GRBEnv env = GRBEnv();
-    env.set("LogFile", "info.log");
-    env.start();
-    GRBModel model = GRBModel(env);
+    GRBModel model = GRBModel(*env);
     model.set(GRB_IntParam_LogToConsole, 0);
 
     //Create bounds for solution. Use double type to match addVars() requirements

@@ -13,6 +13,7 @@
 #ifndef NFOLD_H
 #define NFOLD_H
 
+#include "gurobi_c++.h"
 #include <iostream>
 #include <vector>
 #include <optional>
@@ -20,12 +21,12 @@
 class NFold {
 public:
   //Constructors
-  NFold();
-  NFold(unsigned int n1, std::vector<int> objective1, std::vector<int> lowerBound1,
+  NFold(GRBEnv *e);
+  NFold(GRBEnv *e, unsigned int n1, std::vector<int> objective1, std::vector<int> lowerBound1,
         std::vector<int> upperBound1, std::vector<std::vector<int> > topMatrix1,
         std::vector<std::vector<int> > diagMatrix1, std::vector<int> b1,
         std::optional<std::vector<int> > initial = std::nullopt);
-  NFold(unsigned int n1, unsigned int r1, unsigned int s1, unsigned int t1,
+  NFold(GRBEnv *e, unsigned int n1, unsigned int r1, unsigned int s1, unsigned int t1,
         std::vector<int> objective1, std::vector<int> lowerBound1,
         std::vector<int> upperBound1, std::vector<std::vector<double> > constraintMatrix1,
         std::vector<int> b1, std::optional<std::vector<int> > initial = std::nullopt);
@@ -46,6 +47,7 @@ public:
 
 
 private:
+  GRBEnv *env;
   unsigned int n;
   unsigned int r;
   unsigned int s;
