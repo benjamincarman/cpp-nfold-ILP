@@ -279,6 +279,8 @@ void NFold::outputState(std::ostream &outs)
     outs << currentSolution[i] << ", ";
   }
   outs << currentSolution[n * t - 1] << ">" << endl;
+
+  outs << endl << "Objective Value: " << innerProduct(objective, currentSolution) << endl;
 }
 
 void NFold::setGraverComplexity(unsigned int gc)
@@ -288,6 +290,8 @@ void NFold::setGraverComplexity(unsigned int gc)
 
 void NFold::solve()
 {
+  cout << "Begin solve with GC: " << graverComplexity << endl;
+
   //NEED DOUBLE CHECK IF INITIAL SOLUTION WAS FOUND?
 
   bool done = false;
@@ -295,6 +299,13 @@ void NFold::solve()
   //Keep obtaining and adding best steps until step of 0 found
   while (!done)
   {
+    cout << "Current solution is: " << endl << "<";
+    for (size_t i = 0; i < n * t - 1; i++)
+    {
+      cout << currentSolution[i] << ", ";
+    }
+    cout << currentSolution[n * t - 1] << ">" << endl;
+
     vector<int> graverBestStep = findGraverBestStep();
 
     //If returns a zero step or a step in wrong direction
@@ -304,6 +315,13 @@ void NFold::solve()
     }
     else //Good step. Add to current solution and continue
     {
+      cout << "Graver best step found:" << endl << "<";
+      for (size_t i = 0; i < n * t - 1; i++)
+      {
+        cout << graverBestStep[i] << ", ";
+      }
+      cout << graverBestStep[n * t - 1] << ">" << endl;
+
       for (size_t i = 0; i < n * t; i++)
       {
         currentSolution[i] += graverBestStep[i];
@@ -336,23 +354,30 @@ vector<int> NFold::findGraverBestStep()
 
     if (innerProduct(objective, goodStep) > -1)
     {
+      cout << "No good step found with lambda: " << lambda << endl;
       break;
     }
 
     int exhaustedLambda = INT_MAX;
-
     for (size_t i = 0; i < n * t; i++)
     {
-      double lowerFeasibleStepLength = (1.0 *(lowerBound[i] - currentSolution[i]))/goodStep[i];
-      double upperFeasibleStepLength = (1.0 *(upperBound[i] - currentSolution[i]))/goodStep[i];
-
-      int bestFeasibleStepLength = int(floor(max(lowerFeasibleStepLength, upperFeasibleStepLength)));
-
-      if (exhaustedLambda > bestFeasibleStepLength)
+      if (goodStep[i] != 0)
       {
-        exhaustedLambda = bestFeasibleStepLength;
+        //cout << "Exhausted Lambda #" << i + 1 << ": " << exhaustedLambda << endl;
+        double lowerFeasibleStepLength = (1.0 *(lowerBound[i] - currentSolution[i]))/goodStep[i];
+        double upperFeasibleStepLength = (1.0 *(upperBound[i] - currentSolution[i]))/goodStep[i];
+
+        int bestFeasibleStepLength = int(floor(max(lowerFeasibleStepLength, upperFeasibleStepLength)));
+        //cout << "LowerFSL: " << lowerFeasibleStepLength << endl;
+        //cout << "UpperFSL: " << upperFeasibleStepLength << endl;
+        //cout << "BestFSL: " << bestFeasibleStepLength << endl;
+        if (exhaustedLambda > bestFeasibleStepLength)
+        {
+          exhaustedLambda = bestFeasibleStepLength;
+        }
       }
     }
+    //cout << "Lambda: " << lambda << ", Exhausted Lambda: " << exhaustedLambda << endl;
 
     //Just in case
     if (exhaustedLambda == INT_MAX || exhaustedLambda < lambda)
@@ -366,6 +391,11 @@ vector<int> NFold::findGraverBestStep()
     }
     int currentObjectiveValue = innerProduct(objective, goodStep);
 
+    if (exhaustedLambda != lambda)
+    {
+      cout << "Lambda changed! Exhausted Lambda: " << exhaustedLambda << endl;
+    }
+    cout << "Objective value for lambda = " << exhaustedLambda << ", is: " << currentObjectiveValue << endl;
     if (currentObjectiveValue < bestObjectiveValue)
     {
       bestObjectiveValue = currentObjectiveValue;
@@ -381,6 +411,7 @@ vector<int> NFold::findGraverBestStep()
 
 vector<int> NFold::findGoodStep(int lambda)
 {
+  cout << "Finding good step with lambda: " << lambda << endl;
   try {
     //Create set Gamma and solve ILP for each
     GRBModel model = GRBModel(*env);
@@ -453,7 +484,7 @@ vector<int> NFold::findGoodStep(int lambda)
     if (model.get(GRB_IntAttr_Status) == GRB_OPTIMAL)
     {
       double objectiveValue = model.get(GRB_DoubleAttr_ObjVal);
-      cout << "Objective value: " << objectiveValue << endl;
+      //cout << "Objective value: " << objectiveValue << endl;
 
       if (objectiveValue > -1)
       {
