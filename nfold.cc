@@ -24,6 +24,10 @@ using namespace std;
 NFold::NFold(GRBEnv *e)
 {
   env = e;
+  solved = false;
+  safelyInstantiated = false;
+  initial = std::nullopt;
+  graverComplexity = 2; //A default graverComplexity
 }
 
 NFold::NFold(GRBEnv *e, unsigned int n1, std::vector<int> objective1, std::vector<int> lowerBound1,
@@ -42,11 +46,18 @@ NFold::NFold(GRBEnv *e, unsigned int n1, std::vector<int> objective1, std::vecto
   topMatrix = topMatrix1;
   diagMatrix = diagMatrix1;
 
+  b = b1;
+  currentSolution.resize(n * t);
+
+  string error = checkDataValidity();
+  if (error != "")
+  {
+    cout << error;
+    exit(-2);
+  }
+
   buildConstraintMatrix();
 
-  b = b1;
-  currentSolution.resize(n * t);
-
   if (initial == std::nullopt)
   {
     //find inital feasible solution
@@ -55,42 +66,62 @@ NFold::NFold(GRBEnv *e, unsigned int n1, std::vector<int> objective1, std::vecto
   {
     currentSolution = initial.value();
   }
+
+  //Check validity of initial solution
+  error = checkInitialSolution();
+  if (error != "")
+  {
+    cout << error;
+    exit(-2);
+  }
+
+  solved = false;
+
+  //Error checks pass, object is safely instantiated
+  safelyInstantiated = true;
 }
 
-NFold::NFold(GRBEnv *e, unsigned int n1, unsigned int r1, unsigned int s1, unsigned int t1,
-             std::vector<int> objective1, std::vector<int> lowerBound1,
-             std::vector<int> upperBound1, std::vector<std::vector<double> > constraintMatrix1,
-             std::vector<int> b1, std::optional<std::vector<int> > initial)
+void NFold::setGraverComplexity(unsigned int gc)
 {
-  env = e;
-  n = n1;
-  r = r1;
-  s = s1;
-  t = t1;
-  r = topMatrix.size();
-  s = diagMatrix.size();
-  t = topMatrix[0].size(); //TODO: error check
-  objective = objective1;
-  lowerBound = lowerBound1;
-  upperBound = upperBound1;
-  constraintMatrix = constraintMatrix1;
-
-  //TODO Maybe set top and diagonal matrices here. Maybe.
-
-  b = b1;
-  currentSolution.resize(n * t);
-
-  if (initial == std::nullopt)
+  if (gc >= 2)
   {
-    //find inital feasible solution
+    solved = false;
+    graverComplexity = gc;
   }
   else
   {
-    currentSolution = initial.value();
+    cout << "Error: Invalid graver complexity." << endl;
+    exit (-2);
   }
 }
 
-void NFold::instantiate(istream &ins)
+int NFold::getOptimizedObjectiveValue() const
+{
+  if (solved)
+  {
+    return innerProduct(objective, currentSolution);
+  }
+  else
+  {
+    cout << "Cannnot get optimized objective value. Instance not solved." << endl;
+    exit(-2);
+  }
+}
+
+vector<int> NFold::getOptimizedSolution() const
+{
+  if (solved)
+  {
+    return currentSolution;
+  }
+  else
+  {
+    cout << "Cannot get optimized solution. Instance not solved." << endl;
+    exit(-2);
+  }
+}
+
+void NFold::inputState(istream &ins)
 {
   //Input matrix dimension values
   ins >> n;
@@ -114,7 +145,6 @@ void NFold::instantiate(istream &ins)
   }
 
   b.resize(r + (n * s));
-  currentSolution.resize(n * t);
 
   //Input vector/matrix values
   for (size_t i = 0; i < n * t; i++)
@@ -144,17 +174,55 @@ void NFold::instantiate(istream &ins)
     }
   }
 
-  buildConstraintMatrix();
-
   for (size_t i = 0; i < r + (n * s); i++)
   {
     ins >> b[i];
   }
+
+  if (ins.eof())
+  {
+    cout << "Error: Input file does not contain enough input data. NFold not instantiated." << endl;
+    exit(-2);
+  }
+
+  //Call error check function
+  string error = checkDataValidity();
+  if (error != "")
+  {
+    cout << error;
+    exit(-2);
+  }
+
+  buildConstraintMatrix();
+
+  vector<int> initialInput;
+  initialInput.resize(n * t);
   for (size_t i = 0; i < n * t; i++)
   {
-    ins >> currentSolution[i];
+    ins >> initialInput[i];
   }
-  //ADD SOME ERROR HANDLING
+
+  if (!ins.eof())
+  {
+    initial = initialInput;
+  }
+  else
+  {
+    cout << "No initial solution provided." << endl;
+    //Commence finding initial solution here
+    exit(-3); //Will delete this
+  }
+
+  //Check validity of initial solution
+  error = checkInitialSolution();
+  if (error != "")
+  {
+    cout << error;
+    exit(-2);
+  }
+
+  //At this point, all is safely instantiated
+  safelyInstantiated = true;
 }
 
 void NFold::buildConstraintMatrix()
@@ -196,106 +264,164 @@ void NFold::buildConstraintMatrix()
   }
 }
 
-void NFold::outputState(std::ostream &outs)
+void NFold::outputState(std::ostream &outs) const
 {
   outs << "n: " << n << endl
        << "r: " << r << endl
        << "s: " << s << endl
        << "t: " << t << endl;
 
-  outs << endl << "Objective:" << endl << "<";
-  for (size_t i = 0; i < n * t - 1; i++)
-  {
-    outs << objective[i] << ", ";
-  }
-  outs << objective[n * t - 1] << ">" << endl;
+  outs << endl << "Objective:" << endl;
+  writeVector(objective, outs);
 
-  outs << endl << "Lower Bound:" << endl << "<";
-  for (size_t i = 0; i < n * t - 1; i++)
-  {
-    outs << lowerBound[i] << ", ";
-  }
-  outs << lowerBound[n * t - 1] << ">" << endl;
+  outs << endl << "Lower Bound:" << endl;
+  writeVector(lowerBound, outs);
 
-  outs << endl << "Upper Bound:" << endl << "<";
-  for (size_t i = 0; i < n * t - 1; i++)
-  {
-    outs << upperBound[i] << ", ";
-  }
-  outs << upperBound[n * t - 1] << ">" << endl;
+  outs << endl << "Upper Bound:" << endl;
+  writeVector(upperBound, outs);
 
-  outs << endl << "A Matrix:" << endl << "[ ";
-  for (size_t i = 0; i < r; i++)
-  {
-    if (i != 0) outs << "  ";
-    outs << "[";
-    for (size_t j = 0; j < t - 1; j++)
-    {
-      outs << topMatrix[i][j] << ", ";
-    }
-    outs << topMatrix[i][t - 1];
-    if (i != r - 1) {outs << "]," << endl;}
-    else {outs << "] ]" << endl;}
-  }
+  outs << endl << "A Matrix:" << endl;
+  writeMatrix(topMatrix, outs);
 
-  outs << endl << "D Matrix:" << endl << "[ ";
-  for (size_t i = 0; i < s; i++)
-  {
-    if (i != 0) outs << "  ";
-    outs << "[";
-    for (size_t j = 0; j < t - 1; j++)
-    {
-      outs << diagMatrix[i][j] << ", ";
-    }
-    outs << diagMatrix[i][t - 1];
-    if (i != s - 1) {outs << "]," << endl;}
-    else {outs << "] ]" << endl;}
-  }
+  outs << endl << "D Matrix:" << endl;
+  writeMatrix(diagMatrix, outs);
 
-  outs << endl << "An Matrix:" << endl << "[ ";
-  for (size_t i = 0; i < r + n * s; i++)
-  {
-    if (i != 0) outs << "  ";
-    outs << "[";
-    for (size_t j = 0; j < n * t - 1; j++)
-    {
-      outs << constraintMatrix[i][j] << ", ";
-    }
-    outs << constraintMatrix[i][n * t - 1];
-    if (i != r + n * s - 1) {outs << "]," << endl;}
-    else {outs << "] ]" << endl;}
-  }
+  outs << endl << "An Matrix:" << endl;
+  writeMatrix(constraintMatrix, outs);
 
-  outs << endl << "RHS (b): " << endl << "<";
-  for (size_t i = 0; i < r + n * s - 1; i++)
-  {
-    outs << b[i] << ", ";
-  }
-  outs << b[r + n * s - 1] << ">" << endl;
+  outs << endl << "RHS (b): " << endl;
+  writeVector(b, outs);
 
-  outs << endl << "Solution: " << endl << "<";
-  for (size_t i = 0; i < n * t - 1; i++)
-  {
-    outs << currentSolution[i] << ", ";
-  }
-  outs << currentSolution[n * t - 1] << ">" << endl;
+  outs << endl << "Solution: " << endl;
+  writeVector(currentSolution, outs);
 
   outs << endl << "Objective Value: " << innerProduct(objective, currentSolution) << endl;
 }
 
-void NFold::setGraverComplexity(unsigned int gc)
+string NFold::checkDataValidity() const
 {
-  graverComplexity = gc; //Maybe check a bound?
+  //Check sizes of each vector and matrix
+  if (objective.size() != n * t)
+  {
+    return "Instantiation Error: Objective vector is not of size (n * t)";
+  }
+  if (lowerBound.size() != n * t)
+  {
+    return "Instantiation Error: Lower Bound vector is not of size (n * t)";
+  }
+  if (upperBound.size() != n * t)
+  {
+    return "Instantiation Error: Upper Bound vector is not of size (n * t)";
+  }
+  if (topMatrix.size() != r)
+  {
+    return "Instantiation Error: Top matrix does not have r rows.";
+  }
+  for (size_t i = 0; i < r; i++)
+  {
+    if (topMatrix[i].size() != t)
+    {
+      return "Instantiation Error: Top matrix does not have t columns.";
+    }
+  }
+  if (diagMatrix.size() != s)
+  {
+    return "Instantiation Error: Diagonal matrix does not have s rows.";
+  }
+  for (size_t i = 0; i < s; i++)
+  {
+    if (diagMatrix[i].size() != t)
+    {
+      return "Instantiation Error: Diagonal matrix does not have t columns.";
+    }
+  }
+  if (b.size() != r + n * s)
+  {
+    return "Instantiation Error: RHS vector is not of size (r + n * s)";
+  }
+
+  //Check that lower <= upper
+  for (size_t i = 0; i < n * t; i++)
+  {
+    if (lowerBound[i] > upperBound[i])
+    {
+      return "Instantiation Error: Lower bounds must be less than or equal to upper bounds.";
+    }
+  }
+
+  return "";
 }
 
-void NFold::solve()
+string NFold::checkInitialSolution() const
 {
+  if (initial == std::nullopt)
+  {
+    return "Initial Solution Instantiation Error: No initial solution provided.";
+  }
+
+  vector<int> inSol = initial.value();
+
+  if (inSol.size() != n * t)
+  {
+    return "Initial Solution Instantiation Error: Initial solution is not of size (n * t).";
+  }
+
+  for (size_t i = 0; i < n * t; i++)
+  {
+    if (inSol[i] < lowerBound[i] || inSol[i] > upperBound[i])
+    {
+      return "Initial Solution Instantiation Error: Initial solution is not within upper and lower bounds.";
+    }
+  }
+
+  //Check feasibility of initial solution
+  vector<int> crossProduct;
+  crossProduct.resize(r + n * s);
+
+  //Create inSol vector of doubles to work with constraint matrix
+  vector<double> inSolDouble;
+  inSolDouble.resize(n * t);
+  for (size_t i = 0; i < n * t; i++)
+  {
+    inSolDouble[i] = 1.0 * inSol[i];
+  }
+
+  //Calculate cross product
+  for (size_t i = 0; i < r + n * s; i++)
+  {
+    int prod = int(innerProduct(constraintMatrix[i], inSolDouble));
+    crossProduct[i] = prod;
+  }
+
+  if (crossProduct != b)
+  {
+    return "Initial Solution Instantiation Error: Provided initial solution is infeasible.";
+  }
+
+  //No error found, return empty string
+  return "";
+}
+
+
+bool NFold::solve()
+{
+  if (initial == std::nullopt)
+  {
+    cout << "No initial solution. Unable to solve." << endl;
+    solved = false;
+    return false;
+  }
+
+  if (solved == true)
+  {
+    cout << "Instance already solved." << endl;
+    return true;
+  }
+
+  currentSolution = initial.value();
+
   cout << "Begin solve with GC: " << graverComplexity << endl;
-
-  //NEED DOUBLE CHECK IF INITIAL SOLUTION WAS FOUND?
-
   bool done = false;
-
   //Keep obtaining and adding best steps until step of 0 found
   while (!done)
   {
@@ -328,6 +454,9 @@ void NFold::solve()
       }
     }
   }
+
+  solved = true;
+  return true;
 }
 
 vector<int> NFold::findGraverBestStep()
@@ -351,6 +480,12 @@ vector<int> NFold::findGraverBestStep()
   for (size_t i = 0; i < upperLimit; i++)
   {
     vector<int> goodStep = findGoodStep(lambda);
+    cout << "Good Step Found: " << endl << "<";
+    for (size_t i = 0; i < n * t - 1; i++)
+    {
+      cout << goodStep[i] << ", ";
+    }
+    cout << goodStep[n * t - 1] << ">" << endl;
 
     if (innerProduct(objective, goodStep) > -1)
     {
@@ -363,22 +498,18 @@ vector<int> NFold::findGraverBestStep()
     {
       if (goodStep[i] != 0)
       {
-        //cout << "Exhausted Lambda #" << i + 1 << ": " << exhaustedLambda << endl;
         double lowerFeasibleStepLength = (1.0 *(lowerBound[i] - currentSolution[i]))/goodStep[i];
         double upperFeasibleStepLength = (1.0 *(upperBound[i] - currentSolution[i]))/goodStep[i];
 
         int bestFeasibleStepLength = int(floor(max(lowerFeasibleStepLength, upperFeasibleStepLength)));
-        //cout << "LowerFSL: " << lowerFeasibleStepLength << endl;
-        //cout << "UpperFSL: " << upperFeasibleStepLength << endl;
-        //cout << "BestFSL: " << bestFeasibleStepLength << endl;
+
         if (exhaustedLambda > bestFeasibleStepLength)
         {
           exhaustedLambda = bestFeasibleStepLength;
         }
       }
     }
-    //cout << "Lambda: " << lambda << ", Exhausted Lambda: " << exhaustedLambda << endl;
-
+    
     //Just in case
     if (exhaustedLambda == INT_MAX || exhaustedLambda < lambda)
     {
@@ -521,7 +652,8 @@ vector<int> NFold::findGoodStep(int lambda)
   }
 }
 
-int NFold::innerProduct(const std::vector<int> &v1, const std::vector<int> &v2)
+template <class T>
+T NFold::innerProduct(const std::vector<T> &v1, const std::vector<T> &v2) const
 {
   if (v1.size() != v2.size())
   {
@@ -529,11 +661,40 @@ int NFold::innerProduct(const std::vector<int> &v1, const std::vector<int> &v2)
     exit(-1);
   }
 
-  int prod = 0;
+  T prod = 0;
   for (size_t i = 0; i < v1.size(); i++)
   {
     prod += v1[i] * v2[i];
   }
 
   return prod;
+}
+
+template <class T>
+void NFold::writeVector(const std::vector<T> &v, std::ostream &outs) const
+{
+  outs << "<";
+  for (size_t i = 0; i < v.size() - 1; i++)
+  {
+    outs << v[i] << ", ";
+  }
+  outs << v[v.size() - 1] << ">" << endl;
+}
+
+template <class T>
+void NFold::writeMatrix(const std::vector<std::vector<T> > &m, std::ostream &outs) const
+{
+  outs << "[ ";
+  for (size_t i = 0; i < m.size(); i++)
+  {
+    if (i != 0) outs << "  ";
+    outs << "[";
+    for (size_t j = 0; j < m[i].size() - 1; j++)
+    {
+      outs << m[i][j] << ", ";
+    }
+    outs << m[i][m[i].size() - 1];
+    if (i != m.size() - 1) {outs << "]," << endl;}
+    else {outs << "] ]" << endl;}
+  }
 }

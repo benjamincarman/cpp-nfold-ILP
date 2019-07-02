@@ -26,24 +26,35 @@ public:
         std::vector<int> upperBound1, std::vector<std::vector<int> > topMatrix1,
         std::vector<std::vector<int> > diagMatrix1, std::vector<int> b1,
         std::optional<std::vector<int> > initial = std::nullopt);
-  NFold(GRBEnv *e, unsigned int n1, unsigned int r1, unsigned int s1, unsigned int t1,
-        std::vector<int> objective1, std::vector<int> lowerBound1,
-        std::vector<int> upperBound1, std::vector<std::vector<double> > constraintMatrix1,
-        std::vector<int> b1, std::optional<std::vector<int> > initial = std::nullopt);
-  void instantiate(std::istream &ins);
-  void buildConstraintMatrix();
-  void outputState(std::ostream &outs);
-
+        
   //Setter
   void setGraverComplexity(unsigned int gc);
 
-  //SOLVER
-  void solve();
+  //Getter
+  int getOptimizedObjectiveValue() const;
+  std::vector<int> getOptimizedSolution() const;
+
+  //I/O
+  void inputState(std::istream &ins);
+  void buildConstraintMatrix();
+  void outputState(std::ostream &outs) const;
+
+  //Error checking
+  std::string checkDataValidity() const;
+  std::string checkInitialSolution() const;
+
+  //Solver
+  bool solve();
   std::vector<int> findGraverBestStep();
   std::vector<int> findGoodStep(int lambda);
 
   //Helper
-  int innerProduct(const std::vector<int> &v1, const std::vector<int> &v2);
+  template <class T>
+  T innerProduct(const std::vector<T> &v1, const std::vector<T> &v2) const;
+  template <class T>
+  void writeVector(const std::vector<T> &v, std::ostream &outs) const;
+  template <class T>
+  void writeMatrix(const std::vector<std::vector<T> > &m, std::ostream &outs) const;
 
 
 private:
@@ -62,6 +73,8 @@ private:
   std::vector<int> currentSolution;
   unsigned int graverComplexity;
   std::optional<std::vector<int> > initial;
+  bool solved;
+  bool safelyInstantiated;
 };
 
 #endif
