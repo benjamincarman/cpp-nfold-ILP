@@ -7,7 +7,7 @@ all: build
 build: NFoldSolve
 
 clean:
-	rm main.o nfold.o
+	rm -f main.o nfold.o objVals.txt times.txt
 
 NFoldSolve: main.o nfold.o
 	g++ $(CFLAGS) -o NFoldSolve main.o nfold.o -I$(INC) $(CPPLIB)
