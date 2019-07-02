@@ -123,6 +123,8 @@ vector<int> NFold::getOptimizedSolution() const
 
 void NFold::inputState(istream &ins)
 {
+  solved = false;
+  
   //Input matrix dimension values
   ins >> n;
   ins >> r;
@@ -509,7 +511,7 @@ vector<int> NFold::findGraverBestStep()
         }
       }
     }
-    
+
     //Just in case
     if (exhaustedLambda == INT_MAX || exhaustedLambda < lambda)
     {
