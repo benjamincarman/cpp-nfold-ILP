@@ -11,7 +11,6 @@ clean:
 
 NFoldSolve: main.o nfold.o
 	g++ $(CFLAGS) -o NFoldSolve main.o nfold.o -I$(INC) $(CPPLIB)
-	make clean
 
 main.o: main.cc
 	g++ $(CFLAGS) -c main.cc -I$(INC)
