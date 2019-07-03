@@ -45,16 +45,16 @@ int main(int argc, char *argv[])
       //Measure time at start of solve iteration
       auto start = chrono::high_resolution_clock::now();
 
-      //Create nfold instance
-      NFold nfInstance(&env);
-      nfInstance.inputState(ins);
-      ins.close();
       cout << "-------------------------------------------------------------------" << endl;
       cout << "Beginning New Solve from \"" << filename << "\":" << endl;
       cout << "-------------------------------------------------------------------" << endl << endl;
 
-      //Use gc of 5
-      nfInstance.setGraverComplexity(5);
+      //Create nfold instance
+      NFold nfInstance(&env, 5);
+
+      nfInstance.inputState(ins);
+      ins.close();
+
       bool solved = nfInstance.solve();
       if (!solved)
       {

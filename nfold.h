@@ -21,12 +21,12 @@
 class NFold {
 public:
   //Constructors
-  NFold(GRBEnv *e);
+  NFold(GRBEnv *e, unsigned int gc = 2);
   NFold(GRBEnv *e, unsigned int n1, std::vector<int> objective1, std::vector<int> lowerBound1,
         std::vector<int> upperBound1, std::vector<std::vector<int> > topMatrix1,
         std::vector<std::vector<int> > diagMatrix1, std::vector<int> b1,
-        std::optional<std::vector<int> > initial = std::nullopt);
-        
+        unsigned int gc = 2, std::optional<std::vector<int> > initial1 = std::nullopt);
+
   //Setter
   void setGraverComplexity(unsigned int gc);
 
@@ -47,6 +47,7 @@ public:
   bool solve();
   std::vector<int> findGraverBestStep();
   std::vector<int> findGoodStep(int lambda);
+  void findInitialFeasibleSolution();
 
   //Helper
   template <class T>

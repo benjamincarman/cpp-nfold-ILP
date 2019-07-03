@@ -21,25 +21,25 @@
 
 using namespace std;
 
-NFold::NFold(GRBEnv *e)
+NFold::NFold(GRBEnv *e, unsigned int gc)
 {
   env = e;
   solved = false;
   safelyInstantiated = false;
   initial = std::nullopt;
-  graverComplexity = 2; //A default graverComplexity
+  graverComplexity = gc;
 }
 
 NFold::NFold(GRBEnv *e, unsigned int n1, std::vector<int> objective1, std::vector<int> lowerBound1,
              std::vector<int> upperBound1, std::vector<std::vector<int> > topMatrix1,
              std::vector<std::vector<int> > diagMatrix1, std::vector<int> b1,
-             std::optional<std::vector<int> > initial)
+             unsigned int gc, std::optional<std::vector<int> > initial1)
 {
   env = e;
   n = n1;
-  r = topMatrix.size();
-  s = diagMatrix.size();
-  t = topMatrix[0].size(); //TODO: error check
+  r = topMatrix1.size();
+  s = diagMatrix1.size();
+  t = topMatrix1[0].size();
   objective = objective1;
   lowerBound = lowerBound1;
   upperBound = upperBound1;
@@ -52,26 +52,36 @@ NFold::NFold(GRBEnv *e, unsigned int n1, std::vector<int> objective1, std::vecto
   string error = checkDataValidity();
   if (error != "")
   {
-    cout << error;
+    cout << error << endl;
     exit(-2);
   }
 
   buildConstraintMatrix();
 
-  if (initial == std::nullopt)
+  graverComplexity = gc;
+
+  if (initial1 == std::nullopt)
   {
-    //find inital feasible solution
+    cout << "No initial solution provided." << endl;
+
+    //Commence finding initial solution here
+    findInitialFeasibleSolution();
+    if (initial == std::nullopt)
+    {
+      cout << "No feasible solution for this instance exists." << endl;
+      exit(-2);
+    }
   }
   else
   {
-    currentSolution = initial.value();
+    initial = initial1.value();
   }
 
   //Check validity of initial solution
   error = checkInitialSolution();
   if (error != "")
   {
-    cout << error;
+    cout << error << endl;
     exit(-2);
   }
 
@@ -124,7 +134,7 @@ vector<int> NFold::getOptimizedSolution() const
 void NFold::inputState(istream &ins)
 {
   solved = false;
-  
+
   //Input matrix dimension values
   ins >> n;
   ins >> r;
@@ -191,7 +201,7 @@ void NFold::inputState(istream &ins)
   string error = checkDataValidity();
   if (error != "")
   {
-    cout << error;
+    cout << error << endl;
     exit(-2);
   }
 
@@ -211,15 +221,21 @@ void NFold::inputState(istream &ins)
   else
   {
     cout << "No initial solution provided." << endl;
+
     //Commence finding initial solution here
-    exit(-3); //Will delete this
+    findInitialFeasibleSolution();
+    if (initial == std::nullopt)
+    {
+      cout << "No feasible solution for this instance exists." << endl;
+      exit(-2);
+    }
   }
 
   //Check validity of initial solution
   error = checkInitialSolution();
   if (error != "")
   {
-    cout << error;
+    cout << error << endl;
     exit(-2);
   }
 
@@ -282,10 +298,10 @@ void NFold::outputState(std::ostream &outs) const
   outs << endl << "Upper Bound:" << endl;
   writeVector(upperBound, outs);
 
-  outs << endl << "A Matrix:" << endl;
+  outs << endl << "Top Matrix:" << endl;
   writeMatrix(topMatrix, outs);
 
-  outs << endl << "D Matrix:" << endl;
+  outs << endl << "Diagonal Matrix:" << endl;
   writeMatrix(diagMatrix, outs);
 
   outs << endl << "An Matrix:" << endl;
@@ -651,6 +667,219 @@ vector<int> NFold::findGoodStep(int lambda)
     cout << "Exception during optimization in findGoodStep()" << endl;
     cout << "Exiting program..." << endl;
     exit(-1);
+  }
+}
+
+void NFold::findInitialFeasibleSolution()
+{
+  cout << "Trying to find initial feasible solution." << endl;
+
+  vector<int> iObjective;
+  vector<int> iLowerBound;
+  vector<int> iUpperBound;
+  vector<vector<int> > iTopMatrix(r, vector<int>(2 * (r + s) + t, 0));
+  vector<vector<int> > iDiagMatrix(s, vector<int>(2 * (r + s) + t, 0));
+  vector<int> iInitial;
+
+  //Set sizes of vectors
+  iObjective.resize(n * (2 * (r + s) + t));
+  iLowerBound.resize(n * (2 * (r + s) + t));
+  iUpperBound.resize(n * (2 * (r + s) + t));
+  iInitial.resize(n * (2 * (r + s) + t));
+
+  size_t newBrickSize = t + 2 * (r + s);
+
+  //Initialize objective
+  for (size_t brick = 0; brick < n; brick++)
+  {
+    for (size_t i = 0; i < t; i++)
+    {
+      iObjective[brick * newBrickSize + i] = 0;
+    }
+    for (size_t i = t; i < newBrickSize; i++)
+    {
+      iObjective[brick * newBrickSize + i] = 1;
+    }
+  }
+
+  //Initialize lower bound
+  for (size_t brick = 0; brick < n; brick++)
+  {
+    for (size_t i = 0; i < t; i++)
+    {
+      iLowerBound[brick * newBrickSize + i] = lowerBound[i];
+    }
+    for (size_t i = t; i < newBrickSize; i++)
+    {
+      iLowerBound[brick * newBrickSize + i] = 0;
+    }
+  }
+
+  //Get bMax value for upper bound
+  int bMax = 0;
+  for (size_t i = 0; i < r + n * s; i++)
+  {
+      if (abs(b[i]) > bMax)
+      {
+        bMax = abs(b[i]);
+      }
+  }
+
+  //Initialize upper bound
+  for (size_t brick = 0; brick < n; brick++)
+  {
+    for (size_t i = 0; i < t; i++)
+    {
+      iUpperBound[brick * newBrickSize + i] = upperBound[i];
+    }
+    for (size_t i = t; i < newBrickSize; i++)
+    {
+      iUpperBound[brick * newBrickSize + i] = bMax;
+    }
+  }
+
+  //Initialize top matrix
+  for (size_t i = 0; i < r; i++)
+  {
+    for (size_t j = 0; j < t; j++)
+    {
+      iTopMatrix[i][j] = topMatrix[i][j];
+    }
+
+    iTopMatrix[i][i + t] = 1;
+    iTopMatrix[i][i + t + r] = -1;
+  }
+
+  //Initialize the diagonal matrix
+  for (size_t i = 0; i < s; i++)
+  {
+    for (size_t j = 0; j < t; j++)
+    {
+      iDiagMatrix[i][j] = diagMatrix[i][j];
+    }
+
+    iDiagMatrix[i][i + t + r + r] = 1;
+    iDiagMatrix[i][i + t + r + r + s] = -1;
+  }
+
+  //Iniitialize the initial solution for this subproblem
+  size_t index = 0;
+
+  for (size_t i = 0; i < t; i++)
+  {
+    if (lowerBound[i] != INT_MIN)
+    {
+      iInitial[i] = lowerBound[i];
+    }
+    else if (upperBound[i] != INT_MIN)
+    {
+      iInitial[i] = upperBound[i];
+    }
+    else
+    {
+      iInitial[i] = 0;
+    }
+  }
+  index = t;
+  for (size_t i = 0; i < r; i++)
+  {
+    if (b[i] >= 0)
+    {
+      iInitial[i + index] = b[i];
+      iInitial[i + index + r] = 0;
+    }
+    else
+    {
+      iInitial[i + index] = 0;
+      iInitial[i + index + r] = -1 * b[i];
+    }
+  }
+  index = t + 2 * r;
+  for (size_t i = 0; i < s; i++)
+  {
+    if (b[i + r] >= 0)
+    {
+      iInitial[i + index] = b[i + r];
+      iInitial[i + index + s] = 0;
+    }
+    else
+    {
+      iInitial[i + index] = 0;
+      iInitial[i + index + s] = -1 * b[i + r];
+    }
+  }
+  index = newBrickSize;
+
+  //Fill in the rest
+  for (size_t sSection = 1; sSection < n; sSection++)
+  {
+    for (size_t i = 0; i < 2 * r + t; i++)
+    {
+      iInitial[i + index] = 0;
+    }
+    index += 2 * r + t;
+    for (size_t i = 0; i < s; i++)
+    {
+      if (b[r + sSection * s] >= 0)
+      {
+        iInitial[i + index] = b[r + sSection * s];
+        iInitial[i + index + s] = 0;
+      }
+      else
+      {
+        iInitial[i + index] = 0;
+        iInitial[i + index + s] = -1 * b[r + sSection * s];
+      }
+    }
+
+    index += 2 * s;
+  }
+
+  //Create instance
+  NFold auxILP(env, n, iObjective, iLowerBound, iUpperBound,
+               iTopMatrix, iDiagMatrix, b, graverComplexity, iInitial);
+  auxILP.solve();
+  auxILP.outputState(cout);
+
+  //Check solution of auxILP
+  vector<int> auxSolution = auxILP.getOptimizedSolution();
+
+  bool valid = true;
+  for (size_t brick = 0; brick < n; brick++)
+  {
+    for (size_t i = t; i < newBrickSize; i++)
+    {
+      if (auxSolution[brick * newBrickSize + i] != 0)
+      {
+        valid = false;
+        break;
+      }
+    }
+    if (!valid)
+    {
+      break;
+    }
+  }
+
+  if (!valid)
+  {
+    initial = std::nullopt;
+  }
+  else
+  {
+    vector<int> finalSolution;
+    finalSolution.resize(n * t);
+
+    for (size_t brick = 0; brick < n; brick++)
+    {
+      for (size_t i = 0; i < t; i++)
+      {
+        finalSolution[brick * t + i] = auxSolution[brick * newBrickSize + i];
+      }
+    }
+    cout << "Initial Feasible Solution Found: " << endl;
+    auxILP.writeVector(finalSolution, cout);
+    initial = finalSolution;
   }
 }
 
