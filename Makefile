@@ -15,5 +15,5 @@ NFoldSolve: main.o nfold.o
 main.o: main.cc
 	g++ $(CFLAGS) -c main.cc -I$(INC)
 
-nfold.o: nfold.cc
+nfold.o: nfold.cc nfold.h
 	g++ $(CFLAGS) -c nfold.cc -I$(INC)
