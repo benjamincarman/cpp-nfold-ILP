@@ -6,7 +6,9 @@
  *
  * Date: June 4, 2019
  *
- * Description: A testing harness for NFold class.
+ * Description: A testing harness for NFold class. Allows arbitrary number of
+ *              test input files from command line arguments and then solves each
+ *              instance recording the time taken and objective value reached.
  *
  ******************************************************************************/
 

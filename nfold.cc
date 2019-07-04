@@ -6,7 +6,12 @@
  *
  * Date: June 4, 2019
  *
- * Description:
+ * Description: An implementation file of the NFold class which allows for the
+ *              the creation of an ILP instance with the n-fold form. This class
+ *              verifies the ILP's structure and can solve it by finding
+ *              augmenting steps using Gurobi to solve auxillary programs until
+ *              an optimum solution is reached. See documentation, README, and
+ *              paper by Altmanová, Knop, and Koutecký for more information.
  *
  ******************************************************************************/
 
