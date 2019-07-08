@@ -39,6 +39,7 @@ This program utilizes this special structure to find augmenting steps from an in
 2. Ensure that the environment variable GRB_LICENSE_FILE is set to point to your gurobi.lic file by adding it to your .bashrc file.
 3. Ensure that the macros INC and CPPLIB in the Makefile correctly point to the include/ and lib/ directories of your Gurobi installation.
 4. Finally to run all test examples, simply run:
+
         make
         ./NFoldSolve tests/*.txt
 
