@@ -629,6 +629,15 @@ vector<int> NFold::findGoodStep(int lambda)
     GRBLinExpr graverConstraint;
     graverConstraint.addTerms(arrayOnes, positive, n * t);
     graverConstraint.addTerms(arrayOnes, negative, n * t);
+
+    delete[] lb;
+    delete[] ub;
+    delete[] obj;
+    delete[] lbZero;
+    delete[] ubInfinity;
+    delete[] vTypesInt;
+    delete[] arrayOnes;
+
     model.addConstr(graverConstraint, GRB_LESS_EQUAL, graverComplexity);
 
     model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
